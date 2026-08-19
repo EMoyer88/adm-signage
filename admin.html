@@ -398,7 +398,9 @@ function renderItems() {
     card.className = 'item-card';
     card.draggable = true;
     card.dataset.idx = idx;
-    const thumb = item.type === 'video' ? `<div class="item-thumb video-thumb">▶</div>` : `<img class="item-thumb" src="${item.url}">`;
+    const thumb = item.type === 'video' ? `<div class="item-thumb video-thumb">▶</div>`
+      : item.type === 'youtube' ? `<img class="item-thumb" src="https://img.youtube.com/vi/${item.url}/hqdefault.jpg">`
+      : `<img class="item-thumb" src="${item.url}">`;
     card.innerHTML = `
       <div class="drag-handle">⠿</div>
       ${thumb}
@@ -467,11 +469,30 @@ async function handleFile(file) {
   }
 }
 
+function extractYouTubeId(url) {
+  const patterns = [
+    /youtube\.com\/watch\?v=([\w-]{11})/,
+    /youtu\.be\/([\w-]{11})/,
+    /youtube\.com\/shorts\/([\w-]{11})/,
+    /youtube\.com\/embed\/([\w-]{11})/
+  ];
+  for (const re of patterns) {
+    const m = url.match(re);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 document.getElementById('addLinkBtn').onclick = () => {
   const url = document.getElementById('linkInput').value.trim();
   if (!url) return;
-  const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(url);
-  currentItems.push({ type: isVideo ? 'video' : 'image', url, eyebrow: '', title: '', subtitle: '', price: '', unit: '' });
+  const ytId = extractYouTubeId(url);
+  if (ytId) {
+    currentItems.push({ type: 'youtube', url: ytId, eyebrow: '', title: '', subtitle: '', price: '', unit: '' });
+  } else {
+    const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(url);
+    currentItems.push({ type: isVideo ? 'video' : 'image', url, eyebrow: '', title: '', subtitle: '', price: '', unit: '' });
+  }
   document.getElementById('linkInput').value = '';
   renderItems();
 };
