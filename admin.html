@@ -133,6 +133,9 @@
 
   <div class="panel">
     <h2>Carousel content <span style="color:var(--cream-dim); font-weight:400;">— drag to reorder</span></h2>
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <button class="btn-secondary btn-small" id="reinsertBtn">+ Reinsert Logo/Header slides</button>
+    </div>
     <div id="item-list"></div>
     <div id="emptyNote" class="empty-note hidden">No content yet — add a photo, video, or link above.</div>
   </div>
@@ -351,7 +354,7 @@ async function loadStore(storeId) {
   ]);
   if (sErr || iErr) { setStatus('Error loading store: ' + (sErr || iErr).message, 'err'); return; }
   currentSettings = settings || { store_id: storeId, tagline: '', latitude: 40.31, longitude: -75.63 };
-  currentItems = items || [];
+  currentItems = (items && items.length) ? items : [{ type: 'logo' }, { type: 'weather' }];
   renderAll();
   setStatus(`Editing ${storeId}`);
   updatePreview();
@@ -395,12 +398,29 @@ function renderItems() {
   empty.classList.add('hidden');
   currentItems.forEach((item, idx) => {
     const card = document.createElement('div');
-    card.className = 'item-card';
     card.draggable = true;
     card.dataset.idx = idx;
+
+    if (item.type === 'logo' || item.type === 'weather') {
+      card.className = 'item-card';
+      card.style.alignItems = 'center';
+      const label = item.type === 'logo' ? '🖼️ Logo slide' : '☀️ Weather slide';
+      card.innerHTML = `
+        <div class="drag-handle">⠿</div>
+        <div style="flex:1; font-weight:600;">${label}</div>
+        <div class="item-actions"><button class="btn-danger btn-small" data-remove="${idx}">Remove</button></div>
+      `;
+      card.querySelector('[data-remove]').onclick = () => { currentItems.splice(idx, 1); renderItems(); };
+      addDragHandlers(card);
+      list.appendChild(card);
+      return;
+    }
+
+    card.className = 'item-card';
     const thumb = item.type === 'video' ? `<div class="item-thumb video-thumb">▶</div>`
       : item.type === 'youtube' ? `<img class="item-thumb" src="https://img.youtube.com/vi/${item.url}/hqdefault.jpg">`
       : `<img class="item-thumb" src="${item.url}">`;
+    const isMedia = item.type === 'video' || item.type === 'youtube';
     card.innerHTML = `
       <div class="drag-handle">⠿</div>
       ${thumb}
@@ -410,11 +430,28 @@ function renderItems() {
         <input class="full" data-f="subtitle" placeholder="Subtitle" value="${item.subtitle || ''}">
         <input data-f="price" placeholder="Price (optional)" value="${item.price || ''}">
         <input data-f="unit" placeholder="e.g. % off thru Sunday" value="${item.unit || ''}">
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
+          Show for <input type="number" min="1" data-f="duration" value="${item.duration ?? (item.type === 'image' ? 11 : 20)}" style="width:60px;"> seconds
+        </label>
+        ${isMedia ? `
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
+          <input type="checkbox" data-f="fullscreen" ${item.fullscreen ? 'checked' : ''}> Play fullscreen (no text panel)
+        </label>` : ''}
+        ${item.type === 'youtube' ? `
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
+          Start at <input type="number" min="0" data-f="start_seconds" value="${item.start_seconds || 0}" style="width:70px;"> seconds
+        </label>` : ''}
       </div>
       <div class="item-actions"><button class="btn-danger btn-small" data-remove="${idx}">Remove</button></div>
     `;
     card.querySelectorAll('input[data-f]').forEach(inp => {
-      inp.addEventListener('input', () => { currentItems[idx][inp.dataset.f] = inp.value; });
+      const evt = inp.type === 'checkbox' ? 'change' : 'input';
+      inp.addEventListener(evt, () => {
+        const val = inp.type === 'checkbox' ? inp.checked
+          : inp.type === 'number' ? (parseInt(inp.value, 10) || 0)
+          : inp.value;
+        currentItems[idx][inp.dataset.f] = val;
+      });
     });
     card.querySelector('[data-remove]').onclick = () => { currentItems.splice(idx, 1); renderItems(); };
     addDragHandlers(card);
@@ -461,7 +498,10 @@ async function handleFile(file) {
     const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type });
     if (upErr) throw upErr;
     const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    currentItems.push({ type: isVideo ? 'video' : 'image', url: pub.publicUrl, eyebrow: '', title: '', subtitle: '', price: '', unit: '' });
+    currentItems.push({
+      type: isVideo ? 'video' : 'image', url: pub.publicUrl, eyebrow: '', title: '', subtitle: '', price: '', unit: '',
+      duration: isVideo ? 20 : 11, fullscreen: false, start_seconds: 0
+    });
     renderItems();
     uploadStatus.textContent = `Added ${file.name}. Don't forget to Publish.`;
   } catch (e) {
@@ -483,17 +523,34 @@ function extractYouTubeId(url) {
   return null;
 }
 
+function extractYouTubeStart(url) {
+  const m = url.match(/[?&](?:t|start)=(\d+)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
 document.getElementById('addLinkBtn').onclick = () => {
   const url = document.getElementById('linkInput').value.trim();
   if (!url) return;
   const ytId = extractYouTubeId(url);
   if (ytId) {
-    currentItems.push({ type: 'youtube', url: ytId, eyebrow: '', title: '', subtitle: '', price: '', unit: '' });
+    currentItems.push({
+      type: 'youtube', url: ytId, eyebrow: '', title: '', subtitle: '', price: '', unit: '',
+      duration: 20, fullscreen: false, start_seconds: extractYouTubeStart(url)
+    });
   } else {
     const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(url);
-    currentItems.push({ type: isVideo ? 'video' : 'image', url, eyebrow: '', title: '', subtitle: '', price: '', unit: '' });
+    currentItems.push({
+      type: isVideo ? 'video' : 'image', url, eyebrow: '', title: '', subtitle: '', price: '', unit: '',
+      duration: isVideo ? 20 : 11, fullscreen: false, start_seconds: 0
+    });
   }
   document.getElementById('linkInput').value = '';
+  renderItems();
+};
+
+document.getElementById('reinsertBtn').onclick = () => {
+  currentItems.push({ type: 'logo' });
+  currentItems.push({ type: 'weather' });
   renderItems();
 };
 
@@ -517,9 +574,10 @@ publishBtn.onclick = async () => {
 
     if (currentItems.length) {
       const rows = currentItems.map((it, i) => ({
-        store_id: storeId, position: i, type: it.type, url: it.url,
+        store_id: storeId, position: i, type: it.type, url: it.url || null,
         eyebrow: it.eyebrow || null, title: it.title || null,
-        subtitle: it.subtitle || null, price: it.price || null, unit: it.unit || null
+        subtitle: it.subtitle || null, price: it.price || null, unit: it.unit || null,
+        duration: it.duration || null, fullscreen: !!it.fullscreen, start_seconds: it.start_seconds || 0
       }));
       const { error: insErr } = await supabase.from('signage_items').insert(rows);
       if (insErr) throw insErr;

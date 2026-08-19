@@ -241,11 +241,24 @@ function renderWeather() {
 
 function renderPromoItem(item) {
   const el = document.createElement('div');
+  const isMedia = item.type === 'video' || item.type === 'youtube';
+
+  if (isMedia && item.fullscreen) {
+    el.className = 'scene scene-fullvideo';
+    const mediaHtml = item.type === 'video'
+      ? `<video src="${item.url}" autoplay muted loop playsinline></video>`
+      : `<iframe src="https://www.youtube.com/embed/${item.url}?autoplay=1&mute=1&controls=0&loop=1&playlist=${item.url}&start=${item.start_seconds || 0}&modestbranding=1&rel=0" style="width:100%;height:100%;border:0;" allow="autoplay"></iframe>`;
+    const bug = item.title || item.eyebrow
+      ? `<div class="video-bug">${item.eyebrow ? item.eyebrow + ' · ' : ''}${item.title || ''}</div>` : '';
+    el.innerHTML = mediaHtml + bug;
+    return el;
+  }
+
   el.className = 'scene scene-promo';
   const mediaHtml = item.type === 'video'
     ? `<video src="${item.url}" autoplay muted loop playsinline></video>`
     : item.type === 'youtube'
-    ? `<iframe src="https://www.youtube.com/embed/${item.url}?autoplay=1&mute=1&controls=0&loop=1&playlist=${item.url}&modestbranding=1&rel=0" style="width:100%;height:100%;border:0;" allow="autoplay"></iframe>`
+    ? `<iframe src="https://www.youtube.com/embed/${item.url}?autoplay=1&mute=1&controls=0&loop=1&playlist=${item.url}&start=${item.start_seconds || 0}&modestbranding=1&rel=0" style="width:100%;height:100%;border:0;" allow="autoplay"></iframe>`
     : `<img src="${item.url}" alt="">`;
   el.innerHTML = `
     <div class="promo-image">${mediaHtml}</div>
@@ -263,13 +276,8 @@ const labels = { logo: "OUR STORY", weather: "TIME & WEATHER", item: "TODAY'S DE
 
 let seqIndex = 0;
 function buildSequence() {
-  const seq = ['logo'];
-  const items = DATA.items && DATA.items.length ? DATA.items : [{ type: 'image', url: null }];
-  items.forEach((item, i) => {
-    seq.push({ kind: 'item', item });
-    seq.push(i % 3 === 2 ? 'logo' : 'weather');
-  });
-  return seq;
+  const items = DATA.items && DATA.items.length ? DATA.items : [{ type: 'logo' }];
+  return items;
 }
 
 function playNext() {
@@ -279,13 +287,15 @@ function playNext() {
   seqIndex++;
 
   let el, type, duration;
-  if (step === 'logo') {
+  if (step.type === 'logo') {
     el = renderLogo(); type = 'logo'; duration = 10;
-  } else if (step === 'weather') {
+  } else if (step.type === 'weather') {
     el = renderWeather(); type = 'weather'; duration = 12;
-  } else if (step.kind === 'item') {
-    if (!step.item.url) { playNext(); return; }
-    el = renderPromoItem(step.item); type = 'item'; duration = 11;
+  } else {
+    if (!step.url) { playNext(); return; }
+    el = renderPromoItem(step);
+    type = 'item';
+    duration = step.duration || (step.type === 'image' ? 11 : 20);
   }
 
   stage.appendChild(el);
