@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>A.D. Moyer Signage Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --black: #141414; --charcoal: #232323; --red: #c1282d; --red-dark: #8f1e22;
+    --cream: #f5f2ec; --cream-dim: #6b6b68; --bg: #f0eee9; --card: #ffffff;
+    --line: #e2ded5; --green: #2e8b3d;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Work Sans', sans-serif; background: var(--bg); color: var(--black); }
+  .display { font-family: 'Oswald', sans-serif; }
+
+  header {
+    background: var(--black); color: var(--cream);
+    padding: 18px 28px; display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 4px solid var(--red);
+  }
+  header .title { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 20px; letter-spacing: 0.03em; }
+  header .title span { color: var(--red); }
+  #store-picker { display: flex; align-items: center; gap: 10px; }
+  #store-picker select {
+    background: var(--charcoal); color: var(--cream); border: 1px solid #3a3a3a;
+    padding: 8px 12px; border-radius: 6px; font-size: 14px;
+  }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 26px 20px 80px; }
+
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 22px; margin-bottom: 22px; }
+  .panel h2 { font-family: 'Oswald', sans-serif; font-size: 16px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--red-dark); margin-bottom: 14px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 13px; color: var(--cream-dim); margin-bottom: 5px; font-weight: 600; }
+  .field input, .field textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; font-family: inherit; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  button { font-family: inherit; font-weight: 600; font-size: 14px; cursor: pointer; border: none; border-radius: 7px; padding: 10px 18px; }
+  .btn-primary { background: var(--red); color: white; }
+  .btn-primary:hover { background: var(--red-dark); }
+  .btn-secondary { background: var(--bg); color: var(--black); border: 1px solid var(--line); }
+  .btn-secondary:hover { background: #e6e2d8; }
+  .btn-danger { background: transparent; color: #a33; border: 1px solid #d8c0c0; }
+  .btn-small { padding: 6px 12px; font-size: 13px; }
+
+  #dropzone { border: 2px dashed var(--line); border-radius: 10px; padding: 30px; text-align: center; color: var(--cream-dim); cursor: pointer; transition: 0.15s; }
+  #dropzone.drag { border-color: var(--red); background: #fff4f2; color: var(--red-dark); }
+  #dropzone strong { color: var(--black); }
+
+  .or-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--cream-dim); font-size: 13px; }
+  .or-divider::before, .or-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .link-row { display: flex; gap: 10px; }
+  .link-row input { flex: 1; }
+
+  #item-list { display: flex; flex-direction: column; gap: 10px; }
+  .item-card { display: flex; gap: 14px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fbfaf7; cursor: grab; }
+  .item-card.dragging { opacity: 0.4; }
+  .item-thumb { width: 90px; height: 60px; border-radius: 6px; object-fit: cover; background: #ddd; flex-shrink: 0; }
+  .item-thumb.video-thumb { display: flex; align-items: center; justify-content: center; background: #222; color: white; font-size: 22px; }
+  .item-fields { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .item-fields input { font-size: 13px; padding: 7px 9px; }
+  .item-fields input.full { grid-column: 1 / -1; }
+  .item-actions { display: flex; flex-direction: column; gap: 6px; }
+  .drag-handle { color: var(--cream-dim); font-size: 18px; padding: 0 4px; user-select: none; }
+  .empty-note { color: var(--cream-dim); font-size: 14px; padding: 10px 0; }
+
+  #status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--black); color: var(--cream); padding: 12px 28px; display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
+  #status-msg.ok { color: #7bd88f; }
+  #status-msg.err { color: #ff9b95; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="login-gate" style="position:fixed; inset:0; background:#141414; color:#f5f2ec; display:flex; align-items:center; justify-content:center; z-index:9999; font-family:'Work Sans', sans-serif;">
+  <div style="background:#232323; padding:32px; border-radius:12px; width:320px; border-top:4px solid #c1282d;">
+    <div id="signin-view">
+      <h2 style="font-family:'Oswald', sans-serif; margin-bottom:16px; letter-spacing:0.03em;">Staff sign in</h2>
+      <input id="loginEmail" type="email" placeholder="Email" autocomplete="username" style="width:100%; padding:9px 11px; margin-bottom:10px; border-radius:6px; border:1px solid #3a3a3a; background:#141414; color:#f5f2ec;">
+      <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%; padding:9px 11px; margin-bottom:14px; border-radius:6px; border:1px solid #3a3a3a; background:#141414; color:#f5f2ec;">
+      <button id="loginBtn" class="btn-primary" style="width:100%;">Sign in</button>
+      <div id="loginError" style="color:#ff9b95; font-size:13px; margin-top:10px; min-height:16px;"></div>
+      <p style="margin-top:14px; font-size:13px; text-align:center;">
+        Need access? <a href="#" id="showRegister" style="color:#c1282d;">Register</a>
+      </p>
+    </div>
+    <div id="register-view" style="display:none;">
+      <h2 style="font-family:'Oswald', sans-serif; margin-bottom:16px; letter-spacing:0.03em;">Request access</h2>
+      <input id="regEmail" type="email" placeholder="you@admoyer.com" autocomplete="username" style="width:100%; padding:9px 11px; margin-bottom:10px; border-radius:6px; border:1px solid #3a3a3a; background:#141414; color:#f5f2ec;">
+      <input id="regPassword" type="password" placeholder="Choose a password" autocomplete="new-password" style="width:100%; padding:9px 11px; margin-bottom:14px; border-radius:6px; border:1px solid #3a3a3a; background:#141414; color:#f5f2ec;">
+      <button id="registerBtn" class="btn-primary" style="width:100%;">Request access</button>
+      <div id="registerError" style="color:#ff9b95; font-size:13px; margin-top:10px; min-height:16px;"></div>
+      <div id="registerSuccess" style="color:#8fd19e; font-size:13px; margin-top:10px; min-height:16px;"></div>
+      <p style="margin-top:14px; font-size:13px; text-align:center;">
+        Already have access? <a href="#" id="showSignin" style="color:#c1282d;">Sign in</a>
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<header>
+  <div class="title">A.D. MOYER <span>SIGNAGE MANAGER</span></div>
+  <div id="store-picker">
+    <label style="font-size:13px;">Editing store:</label>
+    <select id="storeSelect"></select>
+    <button class="btn-secondary btn-small" id="newStoreBtn">+ New store</button>
+  </div>
+</header>
+
+<div id="pending-panel" style="display:none; background:#232323; border-top:4px solid #c1282d; padding:16px 24px; margin-bottom:16px;">
+  <h3 style="font-family:'Oswald', sans-serif; margin:0 0 10px; font-size:15px;">Pending access requests</h3>
+  <div id="pending-list"></div>
+</div>
+
+<main>
+
+  <div class="panel">
+    <h2>Add content</h2>
+    <div id="dropzone">
+      <div><strong>Drag &amp; drop</strong> a photo or video here, or click to browse</div>
+      <input type="file" id="fileInput" accept="image/*,video/*" class="hidden">
+    </div>
+    <div class="or-divider">or paste a video/image link</div>
+    <div class="link-row">
+      <input id="linkInput" placeholder="https://…">
+      <button class="btn-secondary" id="addLinkBtn">Add</button>
+    </div>
+    <div id="uploadStatus" style="font-size:13px; color:var(--cream-dim); margin-top:8px;"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Carousel content <span style="color:var(--cream-dim); font-weight:400;">— drag to reorder</span></h2>
+    <div id="item-list"></div>
+    <div id="emptyNote" class="empty-note hidden">No content yet — add a photo, video, or link above.</div>
+  </div>
+
+  <div class="panel">
+    <h2>Store settings</h2>
+    <div class="field">
+      <label>Logo image</label>
+      <div style="display:flex; align-items:center; gap:14px;">
+        <img id="logoPreview" style="height:50px; background:#222; border-radius:6px; padding:4px;">
+        <button class="btn-secondary btn-small" id="logoUploadBtn">Upload logo</button>
+        <input type="file" id="logoInput" accept="image/*" class="hidden">
+      </div>
+    </div>
+    <div class="field">
+      <label>Tagline (shown under the logo)</label>
+      <input id="storeTag" placeholder="Gilbertsville, PA · Lumber &amp; Hardware since 1939">
+    </div>
+    <div class="row">
+      <div class="field"><label>Weather latitude</label><input id="lat" placeholder="40.31"></div>
+      <div class="field"><label>Weather longitude</label><input id="lng" placeholder="-75.63"></div>
+    </div>
+    <div style="font-size:12px; color:var(--cream-dim);">Tip: search "[your town] latitude longitude" once per store.</div>
+  </div>
+
+  <div class="panel">
+    <h2>Preview</h2>
+    <div style="font-size:13px; color:var(--cream-dim); margin-bottom:10px;">
+      Changes go live on the actual screen within seconds of hitting Publish.
+    </div>
+    <iframe id="previewFrame" style="width:100%; aspect-ratio:16/9; border:1px solid var(--line); border-radius:8px;"></iframe>
+  </div>
+</main>
+
+<div id="status-bar">
+  <span id="status-msg">Connecting…</span>
+  <button class="btn-primary" id="publishBtn" disabled>Publish changes</button>
+</div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://supabase.erikmoyer.me';
+const SUPABASE_ANON_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4NjE5MjU2MCwiZXhwIjo0OTQxODY2MTYwLCJyb2xlIjoiYW5vbiJ9.V75df9SFAf_23iLysAz3GhFnzD23qPLqjMXnTFePBK4';
+const BUCKET = 'signage-media';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  db: { schema: 'signage' }
+});
+
+const statusMsg = document.getElementById('status-msg');
+const publishBtn = document.getElementById('publishBtn');
+const storeSelect = document.getElementById('storeSelect');
+
+/* ---------- Staff login gate ---------- */
+const loginGate = document.getElementById('login-gate');
+const loginBtn = document.getElementById('loginBtn');
+const loginError = document.getElementById('loginError');
+const loginEmail = document.getElementById('loginEmail');
+const loginPassword = document.getElementById('loginPassword');
+
+const signinView = document.getElementById('signin-view');
+const registerView = document.getElementById('register-view');
+const showRegister = document.getElementById('showRegister');
+const showSignin = document.getElementById('showSignin');
+const regEmail = document.getElementById('regEmail');
+const regPassword = document.getElementById('regPassword');
+const registerBtn = document.getElementById('registerBtn');
+const registerError = document.getElementById('registerError');
+const registerSuccess = document.getElementById('registerSuccess');
+
+showRegister.addEventListener('click', (e) => {
+  e.preventDefault();
+  signinView.style.display = 'none';
+  registerView.style.display = 'block';
+});
+showSignin.addEventListener('click', (e) => {
+  e.preventDefault();
+  registerView.style.display = 'none';
+  signinView.style.display = 'block';
+});
+
+async function checkAuth() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { loginGate.style.display = 'flex'; return false; }
+  return await enforceApproval(session);
+}
+
+async function enforceApproval(session) {
+  const email = session.user.email;
+  const { data: rec } = await supabase.from('pending_staff').select('status').eq('email', email).maybeSingle();
+  if (!rec || rec.status !== 'approved') {
+    await supabase.auth.signOut();
+    loginGate.style.display = 'flex';
+    loginError.textContent = rec && rec.status === 'denied'
+      ? 'Your access request was denied.'
+      : 'Your access request is still pending approval.';
+    return false;
+  }
+  loginGate.style.display = 'none';
+  loadPendingRequests();
+  return true;
+}
+
+async function doLogin() {
+  loginError.textContent = '';
+  const email = loginEmail.value.trim();
+  const password = loginPassword.value;
+  if (!email || !password) { loginError.textContent = 'Enter both email and password.'; return; }
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) { loginError.textContent = error.message; return; }
+  await enforceApproval(data.session);
+}
+
+async function doRegister() {
+  registerError.textContent = '';
+  registerSuccess.textContent = '';
+  const email = regEmail.value.trim().toLowerCase();
+  const password = regPassword.value;
+
+  if (!email.endsWith('@admoyer.com')) {
+    registerError.textContent = 'Access is limited to @admoyer.com email addresses.';
+    return;
+  }
+  if (!password || password.length < 8) {
+    registerError.textContent = 'Password must be at least 8 characters.';
+    return;
+  }
+
+  const { error: signUpError } = await supabase.auth.signUp({ email, password });
+  if (signUpError) { registerError.textContent = signUpError.message; return; }
+
+  const { error: pendingError } = await supabase.from('pending_staff').insert({ email });
+  if (pendingError && !pendingError.message.includes('duplicate')) {
+    registerError.textContent = 'Account created, but the access request failed to log: ' + pendingError.message;
+    return;
+  }
+
+  registerSuccess.textContent = 'Request submitted. Check your email to confirm, then wait for approval.';
+  regEmail.value = '';
+  regPassword.value = '';
+}
+
+registerBtn.addEventListener('click', doRegister);
+regPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
+
+/* ---------- Pending requests panel ---------- */
+const pendingPanel = document.getElementById('pending-panel');
+const pendingList = document.getElementById('pending-list');
+
+async function loadPendingRequests() {
+  const { data, error } = await supabase.from('pending_staff').select('*').eq('status', 'pending').order('created_at');
+  if (error || !data || data.length === 0) { pendingPanel.style.display = 'none'; return; }
+
+  pendingPanel.style.display = 'block';
+  pendingList.innerHTML = data.map(r => `
+    <div style="display:flex; align-items:center; gap:12px; padding:8px 0; border-top:1px solid #3a3a3a;">
+      <span style="flex:1;">${r.email}</span>
+      <button class="btn-secondary btn-small approve-btn" data-id="${r.id}">Approve</button>
+      <button class="btn-secondary btn-small deny-btn" data-id="${r.id}" style="color:#ff9b95;">Deny</button>
+    </div>
+  `).join('');
+
+  pendingList.querySelectorAll('.approve-btn').forEach(btn => {
+    btn.addEventListener('click', () => reviewRequest(btn.dataset.id, 'approved'));
+  });
+  pendingList.querySelectorAll('.deny-btn').forEach(btn => {
+    btn.addEventListener('click', () => reviewRequest(btn.dataset.id, 'denied'));
+  });
+}
+
+async function reviewRequest(id, status) {
+  await supabase.from('pending_staff').update({ status, reviewed_at: new Date().toISOString() }).eq('id', id);
+  loadPendingRequests();
+}
+
+
+loginBtn.addEventListener('click', doLogin);
+loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+checkAuth();
+/* ---------- End login gate ---------- */
+
+function setStatus(msg, kind) { statusMsg.textContent = msg; statusMsg.className = kind || ''; }
+
+let currentItems = [];
+let currentSettings = {};
+
+/* ---------- Store list ---------- */
+async function populateStoreList() {
+  const { data, error } = await supabase.from('signage_settings').select('store_id').order('store_id');
+  if (error) { setStatus('Could not load store list: ' + error.message, 'err'); return; }
+  const ids = data.length ? data.map(r => r.store_id) : ['gilbertsville'];
+  storeSelect.innerHTML = ids.map(id => `<option value="${id}">${id}</option>`).join('');
+}
+
+document.getElementById('newStoreBtn').onclick = async () => {
+  const id = prompt('New store ID (short, lowercase, no spaces — e.g. "boyertown"):');
+  if (!id) return;
+  const clean = id.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  const { error } = await supabase.from('signage_settings').insert({ store_id: clean, tagline: '', latitude: 40.31, longitude: -75.63 });
+  if (error) { alert('Could not create store: ' + error.message); return; }
+  await populateStoreList();
+  storeSelect.value = clean;
+  loadStore(clean);
+};
+
+storeSelect.onchange = () => loadStore(storeSelect.value);
+
+/* ---------- Load a store's data ---------- */
+async function loadStore(storeId) {
+  setStatus(`Loading ${storeId}…`);
+  const [{ data: settings, error: sErr }, { data: items, error: iErr }] = await Promise.all([
+    supabase.from('signage_settings').select('*').eq('store_id', storeId).maybeSingle(),
+    supabase.from('signage_items').select('*').eq('store_id', storeId).order('position', { ascending: true })
+  ]);
+  if (sErr || iErr) { setStatus('Error loading store: ' + (sErr || iErr).message, 'err'); return; }
+  currentSettings = settings || { store_id: storeId, tagline: '', latitude: 40.31, longitude: -75.63 };
+  currentItems = items || [];
+  renderAll();
+  setStatus(`Editing ${storeId}`);
+  updatePreview();
+}
+
+function renderAll() {
+  document.getElementById('storeTag').value = currentSettings.tagline || '';
+  document.getElementById('lat').value = currentSettings.latitude ?? '';
+  document.getElementById('lng').value = currentSettings.longitude ?? '';
+  document.getElementById('logoPreview').src = currentSettings.logo_url || '';
+  document.getElementById('logoPreview').style.visibility = currentSettings.logo_url ? 'visible' : 'hidden';
+  renderItems();
+}
+
+document.getElementById('logoUploadBtn').onclick = () => document.getElementById('logoInput').click();
+document.getElementById('logoInput').addEventListener('change', async () => {
+  const file = document.getElementById('logoInput').files[0];
+  if (!file) return;
+  const uploadStatus = document.getElementById('uploadStatus');
+  uploadStatus.textContent = `Uploading logo ${file.name}…`;
+  try {
+    const safeName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const path = `${storeSelect.value}/logo/${safeName}`;
+    const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type });
+    if (upErr) throw upErr;
+    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    currentSettings.logo_url = pub.publicUrl;
+    document.getElementById('logoPreview').src = pub.publicUrl;
+    document.getElementById('logoPreview').style.visibility = 'visible';
+    uploadStatus.textContent = `Logo updated. Don't forget to Publish.`;
+  } catch (e) {
+    uploadStatus.textContent = 'Logo upload failed: ' + e.message;
+  }
+});
+
+function renderItems() {
+  const list = document.getElementById('item-list');
+  const empty = document.getElementById('emptyNote');
+  list.innerHTML = '';
+  if (!currentItems.length) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  currentItems.forEach((item, idx) => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.draggable = true;
+    card.dataset.idx = idx;
+    const thumb = item.type === 'video' ? `<div class="item-thumb video-thumb">▶</div>` : `<img class="item-thumb" src="${item.url}">`;
+    card.innerHTML = `
+      <div class="drag-handle">⠿</div>
+      ${thumb}
+      <div class="item-fields">
+        <input class="full" data-f="eyebrow" placeholder="Eyebrow label (e.g. This week's deal)" value="${item.eyebrow || ''}">
+        <input class="full" data-f="title" placeholder="Title" value="${item.title || ''}">
+        <input class="full" data-f="subtitle" placeholder="Subtitle" value="${item.subtitle || ''}">
+        <input data-f="price" placeholder="Price (optional)" value="${item.price || ''}">
+        <input data-f="unit" placeholder="e.g. % off thru Sunday" value="${item.unit || ''}">
+      </div>
+      <div class="item-actions"><button class="btn-danger btn-small" data-remove="${idx}">Remove</button></div>
+    `;
+    card.querySelectorAll('input[data-f]').forEach(inp => {
+      inp.addEventListener('input', () => { currentItems[idx][inp.dataset.f] = inp.value; });
+    });
+    card.querySelector('[data-remove]').onclick = () => { currentItems.splice(idx, 1); renderItems(); };
+    addDragHandlers(card);
+    list.appendChild(card);
+  });
+}
+
+function addDragHandlers(card) {
+  card.addEventListener('dragstart', () => card.classList.add('dragging'));
+  card.addEventListener('dragend', () => { card.classList.remove('dragging'); syncOrderFromDOM(); });
+  card.addEventListener('dragover', e => {
+    e.preventDefault();
+    const list = document.getElementById('item-list');
+    const dragging = list.querySelector('.dragging');
+    if (dragging && dragging !== card) {
+      const rect = card.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      list.insertBefore(dragging, before ? card : card.nextSibling);
+    }
+  });
+}
+function syncOrderFromDOM() {
+  const cards = Array.from(document.querySelectorAll('#item-list .item-card'));
+  currentItems = cards.map(c => currentItems[Number(c.dataset.idx)]);
+  renderItems();
+}
+
+/* ---------- Adding content ---------- */
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+dropzone.onclick = () => fileInput.click();
+['dragenter', 'dragover'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+async function handleFile(file) {
+  const uploadStatus = document.getElementById('uploadStatus');
+  uploadStatus.textContent = `Uploading ${file.name}…`;
+  try {
+    const isVideo = file.type.startsWith('video');
+    const safeName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const path = `${storeSelect.value}/${safeName}`;
+    const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type });
+    if (upErr) throw upErr;
+    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    currentItems.push({ type: isVideo ? 'video' : 'image', url: pub.publicUrl, eyebrow: '', title: '', subtitle: '', price: '', unit: '' });
+    renderItems();
+    uploadStatus.textContent = `Added ${file.name}. Don't forget to Publish.`;
+  } catch (e) {
+    uploadStatus.textContent = 'Upload failed: ' + e.message;
+  }
+}
+
+document.getElementById('addLinkBtn').onclick = () => {
+  const url = document.getElementById('linkInput').value.trim();
+  if (!url) return;
+  const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(url);
+  currentItems.push({ type: isVideo ? 'video' : 'image', url, eyebrow: '', title: '', subtitle: '', price: '', unit: '' });
+  document.getElementById('linkInput').value = '';
+  renderItems();
+};
+
+/* ---------- Publish ---------- */
+publishBtn.onclick = async () => {
+  const storeId = storeSelect.value;
+  publishBtn.disabled = true;
+  setStatus('Publishing…');
+  try {
+    const tagline = document.getElementById('storeTag').value;
+    const latitude = parseFloat(document.getElementById('lat').value) || currentSettings.latitude;
+    const longitude = parseFloat(document.getElementById('lng').value) || currentSettings.longitude;
+
+    const { error: settingsErr } = await supabase.from('signage_settings')
+      .upsert({ store_id: storeId, tagline, latitude, longitude, logo_url: currentSettings.logo_url || null }, { onConflict: 'store_id' });
+    if (settingsErr) throw settingsErr;
+
+    // Simplest reliable approach: replace this store's items wholesale
+    const { error: delErr } = await supabase.from('signage_items').delete().eq('store_id', storeId);
+    if (delErr) throw delErr;
+
+    if (currentItems.length) {
+      const rows = currentItems.map((it, i) => ({
+        store_id: storeId, position: i, type: it.type, url: it.url,
+        eyebrow: it.eyebrow || null, title: it.title || null,
+        subtitle: it.subtitle || null, price: it.price || null, unit: it.unit || null
+      }));
+      const { error: insErr } = await supabase.from('signage_items').insert(rows);
+      if (insErr) throw insErr;
+    }
+
+    setStatus('Published — the display updates within seconds.', 'ok');
+    await loadStore(storeId);
+  } catch (e) {
+    setStatus('Publish failed: ' + e.message, 'err');
+  } finally {
+    publishBtn.disabled = false;
+  }
+};
+
+function updatePreview() {
+  const path = location.pathname.replace(/admin\.html$/, 'player.html');
+  document.getElementById('previewFrame').src = `${path}?store=${storeSelect.value}`;
+}
+
+(async function boot() {
+  await populateStoreList();
+  publishBtn.disabled = false;
+  await loadStore(storeSelect.value || 'gilbertsville');
+})();
+</script>
+
+</body>
+</html>
