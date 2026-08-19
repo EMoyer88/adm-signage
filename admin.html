@@ -495,12 +495,13 @@ async function handleFile(file) {
     const isVideo = file.type.startsWith('video');
     const safeName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
     const path = `${storeSelect.value}/${safeName}`;
+    const detectedDuration = isVideo ? await getVideoDuration(file) : null;
     const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type });
     if (upErr) throw upErr;
     const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
     currentItems.push({
       type: isVideo ? 'video' : 'image', url: pub.publicUrl, eyebrow: '', title: '', subtitle: '', price: '', unit: '',
-      duration: isVideo ? 20 : 11, fullscreen: false, start_seconds: 0
+      duration: isVideo ? (detectedDuration || 20) : 11, fullscreen: isVideo, start_seconds: 0
     });
     renderItems();
     uploadStatus.textContent = `Added ${file.name}. Don't forget to Publish.`;
@@ -509,7 +510,18 @@ async function handleFile(file) {
   }
 }
 
-function extractYouTubeId(url) {
+function getVideoDuration(fileOrUrl) {
+  return new Promise((resolve) => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.onloadedmetadata = () => {
+      const secs = Math.ceil(v.duration);
+      resolve(Number.isFinite(secs) && secs > 0 ? secs : null);
+    };
+    v.onerror = () => resolve(null);
+    v.src = typeof fileOrUrl === 'string' ? fileOrUrl : URL.createObjectURL(fileOrUrl);
+  });
+}
   const patterns = [
     /youtube\.com\/watch\?v=([\w-]{11})/,
     /youtu\.be\/([\w-]{11})/,
@@ -528,24 +540,28 @@ function extractYouTubeStart(url) {
   return m ? parseInt(m[1], 10) : 0;
 }
 
-document.getElementById('addLinkBtn').onclick = () => {
+document.getElementById('addLinkBtn').onclick = async () => {
   const url = document.getElementById('linkInput').value.trim();
   if (!url) return;
   const ytId = extractYouTubeId(url);
   if (ytId) {
+    // Note: exact YouTube video length isn't available without a YouTube Data API key,
+    // so this uses a placeholder duration — adjust the "Show for" field manually if needed.
     currentItems.push({
       type: 'youtube', url: ytId, eyebrow: '', title: '', subtitle: '', price: '', unit: '',
-      duration: 20, fullscreen: false, start_seconds: extractYouTubeStart(url)
+      duration: 30, fullscreen: true, start_seconds: extractYouTubeStart(url)
     });
+    renderItems();
   } else {
     const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(url);
+    const detectedDuration = isVideo ? await getVideoDuration(url) : null;
     currentItems.push({
       type: isVideo ? 'video' : 'image', url, eyebrow: '', title: '', subtitle: '', price: '', unit: '',
-      duration: isVideo ? 20 : 11, fullscreen: false, start_seconds: 0
+      duration: isVideo ? (detectedDuration || 20) : 11, fullscreen: isVideo, start_seconds: 0
     });
+    renderItems();
   }
   document.getElementById('linkInput').value = '';
-  renderItems();
 };
 
 document.getElementById('reinsertBtn').onclick = () => {

@@ -304,12 +304,13 @@ function playNext() {
 
   rulerLabel.textContent = "NOW SHOWING · " + labels[type];
 
-  rulerFill.style.transition = 'none'; rulerFill.style.width = '0%';
-  requestAnimationFrame(() => {
-    rulerFill.style.transition = `width ${duration}s linear`;
-    rulerFill.style.width = '100%';
-  });
-  setTimeout(() => { rulerFill.style.width = '0%'; playNext(); }, duration * 1000);
+  rulerFill.style.transition = 'none';
+  rulerFill.style.width = '0%';
+  rulerFill.offsetWidth; // force a reflow so the browser "locks in" 0% before re-enabling the transition
+  rulerFill.style.transition = `width ${duration}s linear`;
+  rulerFill.style.width = '100%';
+
+  setTimeout(() => { playNext(); }, duration * 1000);
 }
 
 (async function init() {
