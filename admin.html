@@ -84,7 +84,29 @@
       <div id="loginError" style="color:#ff9b95; font-size:13px; margin-top:10px; min-height:16px;"></div>
       <p style="margin-top:14px; font-size:13px; text-align:center;">
         Need access? <a href="#" id="showRegister" style="color:#c1282d;">Register</a>
+        &nbsp;·&nbsp;
+        <a href="#" id="showForgot" style="color:#c1282d;">Forgot password?</a>
       </p>
+    </div>
+
+    <div id="forgot-view" style="display:none;">
+      <h2 style="font-family:'Oswald', sans-serif; margin-bottom:16px; letter-spacing:0.03em;">Reset password</h2>
+      <p style="font-size:13px; color:#a39c92; margin-bottom:14px;">Enter your email and we'll send a reset link.</p>
+      <input id="forgotEmail" type="email" placeholder="you@admoyer.com" autocomplete="username" style="width:100%; padding:9px 11px; margin-bottom:14px; border-radius:6px; border:1px solid #3a3a3a; background:#141414; color:#f5f2ec;">
+      <button id="forgotBtn" class="btn-primary" style="width:100%;">Send reset link</button>
+      <div id="forgotError" style="color:#ff9b95; font-size:13px; margin-top:10px; min-height:16px;"></div>
+      <div id="forgotSuccess" style="color:#8fd19e; font-size:13px; margin-top:10px; min-height:16px;"></div>
+      <p style="margin-top:14px; font-size:13px; text-align:center;">
+        <a href="#" id="showSigninFromForgot" style="color:#c1282d;">Back to sign in</a>
+      </p>
+    </div>
+
+    <div id="reset-confirm-view" style="display:none;">
+      <h2 style="font-family:'Oswald', sans-serif; margin-bottom:16px; letter-spacing:0.03em;">Set a new password</h2>
+      <input id="newPassword" type="password" placeholder="New password" autocomplete="new-password" style="width:100%; padding:9px 11px; margin-bottom:10px; border-radius:6px; border:1px solid #3a3a3a; background:#141414; color:#f5f2ec;">
+      <input id="newPasswordConfirm" type="password" placeholder="Confirm new password" autocomplete="new-password" style="width:100%; padding:9px 11px; margin-bottom:14px; border-radius:6px; border:1px solid #3a3a3a; background:#141414; color:#f5f2ec;">
+      <button id="setNewPasswordBtn" class="btn-primary" style="width:100%;">Update password</button>
+      <div id="resetConfirmError" style="color:#ff9b95; font-size:13px; margin-top:10px; min-height:16px;"></div>
     </div>
     <div id="register-view" style="display:none;">
       <h2 style="font-family:'Oswald', sans-serif; margin-bottom:16px; letter-spacing:0.03em;">Request access</h2>
@@ -207,16 +229,34 @@ const registerBtn = document.getElementById('registerBtn');
 const registerError = document.getElementById('registerError');
 const registerSuccess = document.getElementById('registerSuccess');
 
-showRegister.addEventListener('click', (e) => {
+const forgotView = document.getElementById('forgot-view');
+const showForgot = document.getElementById('showForgot');
+const showSigninFromForgot = document.getElementById('showSigninFromForgot');
+const forgotEmail = document.getElementById('forgotEmail');
+const forgotBtn = document.getElementById('forgotBtn');
+const forgotError = document.getElementById('forgotError');
+const forgotSuccess = document.getElementById('forgotSuccess');
+
+const resetConfirmView = document.getElementById('reset-confirm-view');
+const newPassword = document.getElementById('newPassword');
+const newPasswordConfirm = document.getElementById('newPasswordConfirm');
+const setNewPasswordBtn = document.getElementById('setNewPasswordBtn');
+const resetConfirmError = document.getElementById('resetConfirmError');
+
+function showView(view) {
+  [signinView, registerView, forgotView, resetConfirmView].forEach(v => v.style.display = 'none');
+  view.style.display = 'block';
+}
+
+showRegister.addEventListener('click', (e) => { e.preventDefault(); showView(registerView); });
+showSignin.addEventListener('click', (e) => { e.preventDefault(); showView(signinView); });
+showForgot.addEventListener('click', (e) => {
   e.preventDefault();
-  signinView.style.display = 'none';
-  registerView.style.display = 'block';
+  forgotError.textContent = '';
+  forgotSuccess.textContent = '';
+  showView(forgotView);
 });
-showSignin.addEventListener('click', (e) => {
-  e.preventDefault();
-  registerView.style.display = 'none';
-  signinView.style.display = 'block';
-});
+showSigninFromForgot.addEventListener('click', (e) => { e.preventDefault(); showView(signinView); });
 
 async function checkAuth() {
   const { data: { session } } = await supabase.auth.getSession();
@@ -281,6 +321,55 @@ async function doRegister() {
 
 registerBtn.addEventListener('click', doRegister);
 regPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
+
+/* ---------- Password reset ---------- */
+async function doForgotPassword() {
+  forgotError.textContent = '';
+  forgotSuccess.textContent = '';
+  const email = forgotEmail.value.trim().toLowerCase();
+  if (!email) { forgotError.textContent = 'Enter your email.'; return; }
+
+  // Sends back to this same page; Supabase appends a recovery token to the URL
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) { forgotError.textContent = error.message; return; }
+
+  forgotSuccess.textContent = 'Check your email for a reset link.';
+  forgotEmail.value = '';
+}
+forgotBtn.addEventListener('click', doForgotPassword);
+forgotEmail.addEventListener('keydown', (e) => { if (e.key === 'Enter') doForgotPassword(); });
+
+async function doSetNewPassword() {
+  resetConfirmError.textContent = '';
+  const pw = newPassword.value;
+  const pw2 = newPasswordConfirm.value;
+  if (!pw || pw.length < 8) { resetConfirmError.textContent = 'Password must be at least 8 characters.'; return; }
+  if (pw !== pw2) { resetConfirmError.textContent = 'Passwords do not match.'; return; }
+
+  const { error } = await supabase.auth.updateUser({ password: pw });
+  if (error) { resetConfirmError.textContent = error.message; return; }
+
+  newPassword.value = '';
+  newPasswordConfirm.value = '';
+  // Password is set and the recovery session is already valid — proceed straight in
+  // if this account is an approved user, same as a normal sign-in would.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) await enforceApproval(session);
+}
+setNewPasswordBtn.addEventListener('click', doSetNewPassword);
+newPasswordConfirm.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSetNewPassword(); });
+
+// Clicking the emailed reset link lands back here with a recovery token in the URL.
+// supabase-js detects it automatically and fires this event — intercept it so the
+// person sets a new password before anything else happens (rather than silently
+// treating the recovery token as a normal login).
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    loginGate.style.display = 'flex';
+    showView(resetConfirmView);
+  }
+});
 
 /* ---------- Pending requests panel ---------- */
 const pendingPanel = document.getElementById('pending-panel');
@@ -522,6 +611,7 @@ function getVideoDuration(fileOrUrl) {
     v.src = typeof fileOrUrl === 'string' ? fileOrUrl : URL.createObjectURL(fileOrUrl);
   });
 }
+function extractYouTubeId(url) {
   const patterns = [
     /youtube\.com\/watch\?v=([\w-]{11})/,
     /youtu\.be\/([\w-]{11})/,
