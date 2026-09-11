@@ -56,6 +56,14 @@
 
   #item-list { display: flex; flex-direction: column; gap: 10px; }
   .item-card { display: flex; gap: 14px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fbfaf7; cursor: grab; }
+  .item-card.status-expired { border: 2px solid var(--red); background: #fdecec; }
+  .item-card.status-upcoming { border: 2px solid var(--green); background: #eaf7ec; }
+  .status-badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  .status-badge.expired { background: var(--red); color: white; }
+  .status-badge.upcoming { background: var(--green); color: white; }
+  .schedule-row { display: flex; gap: 10px; grid-column: 1 / -1; }
+  .schedule-row label { flex: 1; font-size: 13px; }
+  .schedule-row input[type="date"] { width: 100%; margin-top: 4px; }
   .item-card.dragging { opacity: 0.4; }
   .item-thumb { width: 90px; height: 60px; border-radius: 6px; object-fit: cover; background: #ddd; flex-shrink: 0; }
   .item-thumb.video-thumb { display: flex; align-items: center; justify-content: center; background: #222; color: white; font-size: 22px; }
@@ -479,6 +487,48 @@ document.getElementById('logoInput').addEventListener('change', async () => {
   }
 });
 
+function scheduleStatus(item) {
+  if (!item.schedule_enabled) return null;
+  const today = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD, avoids UTC day-shift issues
+  if (item.schedule_through && today > item.schedule_through) return 'expired';
+  if (item.schedule_on && today < item.schedule_on) return 'upcoming';
+  return 'active';
+}
+
+function scheduleBadgeHtml(status) {
+  if (status === 'expired') return `<span class="status-badge expired">Expired</span>`;
+  if (status === 'upcoming') return `<span class="status-badge upcoming">Upcoming</span>`;
+  return '';
+}
+
+function scheduleControlsHtml(item) {
+  let html = `
+    <label style="display:flex; align-items:center; gap:6px; font-size:13px; grid-column:1/-1;">
+      <input type="checkbox" data-f="schedule_enabled" ${item.schedule_enabled ? 'checked' : ''}> Schedule this slide by date
+    </label>`;
+  if (item.schedule_enabled) {
+    html += `
+    <div class="schedule-row">
+      <label>On<br><input type="date" data-f="schedule_on" value="${item.schedule_on || ''}"></label>
+      <label>Through<br><input type="date" data-f="schedule_through" value="${item.schedule_through || ''}"></label>
+    </div>`;
+  }
+  return html;
+}
+
+function bindScheduleAwareInputs(card, idx) {
+  card.querySelectorAll('input[data-f]').forEach(inp => {
+    const evt = (inp.type === 'checkbox' || inp.type === 'date') ? 'change' : 'input';
+    inp.addEventListener(evt, () => {
+      const val = inp.type === 'checkbox' ? inp.checked
+        : inp.type === 'number' ? (parseInt(inp.value, 10) || 0)
+        : inp.value;
+      currentItems[idx][inp.dataset.f] = val;
+      if (['schedule_enabled', 'schedule_on', 'schedule_through'].includes(inp.dataset.f)) renderItems();
+    });
+  });
+}
+
 function renderItems() {
   const list = document.getElementById('item-list');
   const empty = document.getElementById('emptyNote');
@@ -491,21 +541,31 @@ function renderItems() {
     card.dataset.idx = idx;
 
     if (item.type === 'logo' || item.type === 'weather') {
-      card.className = 'item-card';
-      card.style.alignItems = 'center';
-      const label = item.type === 'logo' ? '🖼️ Logo slide' : '☀️ Weather slide';
+      const status = scheduleStatus(item);
+      card.className = 'item-card' + (status === 'expired' ? ' status-expired' : status === 'upcoming' ? ' status-upcoming' : '');
+      const defaultLabel = item.type === 'logo' ? 'OUR STORY' : 'TIME & WEATHER';
+      const icon = item.type === 'logo' ? '🖼️ Logo slide' : '☀️ Weather slide';
       card.innerHTML = `
         <div class="drag-handle">⠿</div>
-        <div style="flex:1; font-weight:600;">${label}</div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="font-weight:600; white-space:nowrap;">${icon}</div>
+            <input data-f="label" placeholder="Label shown in the bottom strip (default: ${defaultLabel})" value="${item.label || ''}" style="flex:1; font-size:13px; padding:7px 9px;">
+            ${scheduleBadgeHtml(status)}
+          </div>
+          ${scheduleControlsHtml(item)}
+        </div>
         <div class="item-actions"><button class="btn-danger btn-small" data-remove="${idx}">Remove</button></div>
       `;
+      bindScheduleAwareInputs(card, idx);
       card.querySelector('[data-remove]').onclick = () => { currentItems.splice(idx, 1); renderItems(); };
       addDragHandlers(card);
       list.appendChild(card);
       return;
     }
 
-    card.className = 'item-card';
+    const status = scheduleStatus(item);
+    card.className = 'item-card' + (status === 'expired' ? ' status-expired' : status === 'upcoming' ? ' status-upcoming' : '');
     const thumb = item.type === 'video' ? `<div class="item-thumb video-thumb">▶</div>`
       : item.type === 'youtube' ? `<img class="item-thumb" src="https://img.youtube.com/vi/${item.url}/hqdefault.jpg">`
       : `<img class="item-thumb" src="${item.url}">`;
@@ -514,9 +574,11 @@ function renderItems() {
       <div class="drag-handle">⠿</div>
       ${thumb}
       <div class="item-fields">
+        ${scheduleBadgeHtml(status) ? `<div style="grid-column:1/-1;">${scheduleBadgeHtml(status)}</div>` : ''}
         <input class="full" data-f="eyebrow" placeholder="Eyebrow label (e.g. This week's deal)" value="${item.eyebrow || ''}">
         <input class="full" data-f="title" placeholder="Title" value="${item.title || ''}">
         <input class="full" data-f="subtitle" placeholder="Subtitle" value="${item.subtitle || ''}">
+        <input class="full" data-f="label" placeholder="Label shown in the bottom strip (default: TODAY'S DEALS)" value="${item.label || ''}">
         <input data-f="price" placeholder="Price (optional)" value="${item.price || ''}">
         <input data-f="unit" placeholder="e.g. % off thru Sunday" value="${item.unit || ''}">
         <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
@@ -530,18 +592,11 @@ function renderItems() {
         <label style="display:flex; align-items:center; gap:6px; font-size:13px;">
           Start at <input type="number" min="0" data-f="start_seconds" value="${item.start_seconds || 0}" style="width:70px;"> seconds
         </label>` : ''}
+        ${scheduleControlsHtml(item)}
       </div>
       <div class="item-actions"><button class="btn-danger btn-small" data-remove="${idx}">Remove</button></div>
     `;
-    card.querySelectorAll('input[data-f]').forEach(inp => {
-      const evt = inp.type === 'checkbox' ? 'change' : 'input';
-      inp.addEventListener(evt, () => {
-        const val = inp.type === 'checkbox' ? inp.checked
-          : inp.type === 'number' ? (parseInt(inp.value, 10) || 0)
-          : inp.value;
-        currentItems[idx][inp.dataset.f] = val;
-      });
-    });
+    bindScheduleAwareInputs(card, idx);
     card.querySelector('[data-remove]').onclick = () => { currentItems.splice(idx, 1); renderItems(); };
     addDragHandlers(card);
     list.appendChild(card);

@@ -274,10 +274,19 @@ function renderPromoItem(item) {
 
 const labels = { logo: "OUR STORY", weather: "TIME & WEATHER", item: "TODAY'S DEALS" };
 
+function isItemActiveToday(item) {
+  if (!item.schedule_enabled) return true;
+  const today = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD
+  if (item.schedule_on && today < item.schedule_on) return false;
+  if (item.schedule_through && today > item.schedule_through) return false;
+  return true;
+}
+
 let seqIndex = 0;
 function buildSequence() {
-  const items = DATA.items && DATA.items.length ? DATA.items : [{ type: 'logo' }];
-  return items;
+  const all = DATA.items && DATA.items.length ? DATA.items : [{ type: 'logo' }];
+  const active = all.filter(isItemActiveToday);
+  return active.length ? active : [{ type: 'logo' }];
 }
 
 function playNext() {
@@ -302,7 +311,7 @@ function playNext() {
   requestAnimationFrame(() => el.classList.add('active'));
   Array.from(stage.children).slice(0, -1).forEach(old => setTimeout(() => old.remove(), 1200));
 
-  rulerLabel.textContent = "NOW SHOWING · " + labels[type];
+  rulerLabel.textContent = "NOW SHOWING · " + (step.label || labels[type]);
 
   rulerFill.style.transition = 'none';
   rulerFill.style.width = '0%';
