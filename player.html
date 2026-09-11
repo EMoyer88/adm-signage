@@ -297,9 +297,9 @@ function playNext() {
 
   let el, type, duration;
   if (step.type === 'logo') {
-    el = renderLogo(); type = 'logo'; duration = 10;
+    el = renderLogo(); type = 'logo'; duration = step.duration ?? 10;
   } else if (step.type === 'weather') {
-    el = renderWeather(); type = 'weather'; duration = 12;
+    el = renderWeather(); type = 'weather'; duration = step.duration ?? 12;
   } else {
     if (!step.url) { playNext(); return; }
     el = renderPromoItem(step);

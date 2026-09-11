@@ -544,6 +544,7 @@ function renderItems() {
       const status = scheduleStatus(item);
       card.className = 'item-card' + (status === 'expired' ? ' status-expired' : status === 'upcoming' ? ' status-upcoming' : '');
       const defaultLabel = item.type === 'logo' ? 'OUR STORY' : 'TIME & WEATHER';
+      const defaultDuration = item.type === 'logo' ? 10 : 12;
       const icon = item.type === 'logo' ? '🖼️ Logo slide' : '☀️ Weather slide';
       card.innerHTML = `
         <div class="drag-handle">⠿</div>
@@ -551,6 +552,9 @@ function renderItems() {
           <div style="display:flex; align-items:center; gap:10px;">
             <div style="font-weight:600; white-space:nowrap;">${icon}</div>
             <input data-f="label" placeholder="Label shown in the bottom strip (default: ${defaultLabel})" value="${item.label || ''}" style="flex:1; font-size:13px; padding:7px 9px;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; white-space:nowrap;">
+              Show for <input type="number" min="1" data-f="duration" value="${item.duration ?? defaultDuration}" style="width:60px;"> seconds
+            </label>
             ${scheduleBadgeHtml(status)}
           </div>
           ${scheduleControlsHtml(item)}
